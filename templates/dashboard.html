@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard &middot; Plagiarism Intelligence</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<header class="navbar">
+  <a class="brand" href="/">&#128269; Plagiarism Intelligence <span class="badge">IBM Granite</span></a>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/submit">Submit</a>
+    <a href="/dashboard">Dashboard</a>
+  </nav>
+</header>
+
+<main class="container">
+  <h1 class="page-title">Instructor Dashboard</h1>
+  <p class="page-subtitle">Monitor all submissions, filter by verdict, and provide feedback.</p>
+
+  <div class="stats-grid">
+    <div class="stat-tile"><div class="value" id="s-total">&#8212;</div><div class="label">Total</div></div>
+    <div class="stat-tile"><div class="value" id="s-flagged" style="color:var(--ibm-red)">&#8212;</div><div class="label">Flagged</div></div>
+    <div class="stat-tile"><div class="value" id="s-suspicious" style="color:#d4a017">&#8212;</div><div class="label">Suspicious</div></div>
+    <div class="stat-tile"><div class="value" id="s-clean" style="color:var(--ibm-green)">&#8212;</div><div class="label">Clean</div></div>
+    <div class="stat-tile"><div class="value" id="s-flag-rate">&#8212;</div><div class="label">Flag Rate</div></div>
+    <div class="stat-tile"><div class="value" id="s-avg-risk">&#8212;</div><div class="label">Avg Risk</div></div>
+  </div>
+
+  <div class="card" style="padding:1rem">
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center">
+      <div>
+        <label style="font-size:.8rem;font-weight:600">Course</label>
+        <select id="filter-course" style="margin-left:.5rem;padding:.4rem .6rem;border:1px solid #e0e0e0;border-radius:4px">
+          <option value="">All courses</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:600">Verdict</label>
+        <select id="filter-verdict" style="margin-left:.5rem;padding:.4rem .6rem;border:1px solid #e0e0e0;border-radius:4px">
+          <option value="">All</option>
+          <option value="flagged">Flagged</option>
+          <option value="suspicious">Suspicious</option>
+          <option value="clean">Clean</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="btn-filter" style="margin-left:auto">Apply Filter</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>All Submissions</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>#</th><th>Student</th><th>Assignment</th><th>Submitted</th><th>Risk Score</th><th>Verdict</th><th>Action</th></tr>
+        </thead>
+        <tbody id="submissions-body">
+          <tr><td colspan="7" style="text-align:center"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>&#128300; Compare Two Texts (IBM Granite)</h3>
+    <p style="font-size:.875rem;color:var(--ibm-gray-70);margin-bottom:1rem">Paste two texts to get instant similarity analysis.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="form-group"><label>Text A</label><textarea id="cmp-a" style="min-height:120px" placeholder="Paste first text..."></textarea></div>
+      <div class="form-group"><label>Text B</label><textarea id="cmp-b" style="min-height:120px" placeholder="Paste second text..."></textarea></div>
+    </div>
+    <button class="btn btn-primary" id="btn-compare">Compare with Granite</button>
+    <div id="cmp-result" style="margin-top:1rem"></div>
+  </div>
+</main>
+
+<footer>AI Plagiarism Intelligence &middot; IBM Granite (watsonx.ai)</footer>
+
+<script>
+async function apiGet(path) {
+  const r = await fetch('/api' + path);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+async function apiPost(path, body) {
+  const r = await fetch('/api' + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+function verdictBadge(v) {
+  const map = { clean:'badge-clean', suspicious:'badge-suspicious', flagged:'badge-flagged' };
+  const lbl = { clean:'&#10003; Clean', suspicious:'&#9888; Suspicious', flagged:'&#10007; Flagged' };
+  return '<span class="' + (map[v]||'badge-suspicious') + '">' + (lbl[v]||v) + '</span>';
+}
+function progressBar(score) {
+  const cls = score >= 0.75 ? 'high' : score >= 0.45 ? 'medium' : 'low';
+  return '<div class="progress-wrap"><div class="progress-bar ' + cls + '" style="width:' + pct(score) + '"></div></div><small style="color:var(--ibm-gray-70)">' + pct(score) + '</small>';
+}
+function toast(msg, type) {
+  type = type || 'info';
+  const el = document.createElement('div');
+  el.className = 'alert alert-' + type;
+  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;min-width:260px;box-shadow:0 4px 12px rgba(0,0,0,.15)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 3500);
+}
+
+var allRows = [];
+
+async function loadAll() {
+  try {
+    const stats = await apiGet('/analysis/stats');
+    document.getElementById('s-total').textContent      = stats.total_analyses;
+    document.getElementById('s-flagged').textContent    = stats.flagged;
+    document.getElementById('s-suspicious').textContent = stats.suspicious;
+    document.getElementById('s-clean').textContent      = stats.clean;
+    document.getElementById('s-flag-rate').textContent  = stats.flag_rate_pct + '%';
+    document.getElementById('s-avg-risk').textContent   = pct(stats.avg_risk_score);
+  } catch(e) { console.warn(e); }
+
+  const courseEl = document.getElementById('filter-course');
+  try {
+    const courses = await apiGet('/assignments/courses');
+    courseEl.innerHTML = '<option value="">All courses</option>';
+    courses.forEach(function(c) {
+      const o = document.createElement('option');
+      o.value = c.id; o.textContent = c.code; courseEl.appendChild(o);
+    });
+
+    allRows = [];
+    for (const course of courses) {
+      const assignments = await apiGet('/assignments?course_id=' + course.id);
+      for (const asgn of assignments) {
+        const subs = await apiGet('/assignments/' + asgn.id + '/submissions');
+        subs.forEach(function(sub) { allRows.push(Object.assign({}, sub, { _course: course, _assignment: asgn })); });
+      }
+    }
+    renderTable(allRows);
+  } catch(e) {
+    document.getElementById('submissions-body').innerHTML =
+      '<tr><td colspan="7" style="text-align:center;color:var(--ibm-gray-70)">No data yet.</td></tr>';
+  }
+}
+
+function renderTable(rows) {
+  const tbody = document.getElementById('submissions-body');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--ibm-gray-70)">No submissions match filter.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(function(sub) {
+    const r = sub.report;
+    const verdict  = r ? r.verdict : 'pending';
+    const riskHtml = r ? progressBar(r.overall_risk_score) : '&mdash;';
+    return '<tr>' +
+      '<td>' + sub.id + '</td>' +
+      '<td><strong>' + sub.student_name + '</strong><br><small>' + sub.student_id + '</small></td>' +
+      '<td>' + sub._assignment.title + '<br><small style="color:var(--ibm-gray-70)">' + sub._course.code + '</small></td>' +
+      '<td style="font-size:.8rem">' + new Date(sub.submitted_at).toLocaleString() + '</td>' +
+      '<td style="min-width:130px">' + riskHtml + '</td>' +
+      '<td>' + verdictBadge(verdict) + '</td>' +
+      '<td><a href="/report/' + sub.id + '" class="btn btn-secondary" style="padding:.3rem .8rem;font-size:.8rem">Report</a></td>' +
+      '</tr>';
+  }).join('');
+}
+
+document.getElementById('btn-filter').addEventListener('click', function() {
+  const courseId = document.getElementById('filter-course').value;
+  const verdict  = document.getElementById('filter-verdict').value;
+  const filtered = allRows.filter(function(s) {
+    if (courseId && String(s._course.id) !== courseId) return false;
+    if (verdict  && s.report && s.report.verdict !== verdict) return false;
+    if (verdict  && !s.report) return false;
+    return true;
+  });
+  renderTable(filtered);
+});
+
+document.getElementById('btn-compare').addEventListener('click', async function() {
+  const ta = document.getElementById('cmp-a').value.trim();
+  const tb = document.getElementById('cmp-b').value.trim();
+  if (!ta || !tb) { toast('Both text fields are required.', 'warning'); return; }
+  const resultEl = document.getElementById('cmp-result');
+  resultEl.innerHTML = '<span class="spinner"></span> Analyzing...';
+  try {
+    const data = await apiPost('/analysis/compare', { text_a: ta, text_b: tb });
+    resultEl.innerHTML = '<div class="alert alert-info">' +
+      '<strong>TF-IDF Similarity:</strong> ' + pct(data.tfidf_similarity) + '<br/>' +
+      '<strong>IBM Granite Explanation:</strong><br/>' +
+      '<p style="margin-top:.4rem">' + (data.explanation||'') + '</p>' +
+      '</div>';
+  } catch(e) {
+    resultEl.innerHTML = '<div class="alert alert-danger">' + e.message + '</div>';
+  }
+});
+
+loadAll();
+</script>
+</body>
+</html>

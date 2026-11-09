@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Report &middot; Plagiarism Intelligence</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<header class="navbar">
+  <a class="brand" href="/">&#128269; Plagiarism Intelligence <span class="badge">IBM Granite</span></a>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/submit">Submit</a>
+    <a href="/dashboard">Dashboard</a>
+  </nav>
+</header>
+
+<main class="container" id="report-main">
+  <div style="text-align:center;padding:4rem"><span class="spinner"></span><p style="margin-top:1rem">Loading report...</p></div>
+</main>
+
+<footer>AI Plagiarism Intelligence &middot; IBM Granite (watsonx.ai)</footer>
+
+<script>
+var submissionId = parseInt('{{ submission_id }}');
+
+async function apiGet(path) {
+  const r = await fetch('/api' + path);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+async function apiPost(path, body) {
+  const r = await fetch('/api' + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+function verdictBadge(v) {
+  const map = { clean:'badge-clean', suspicious:'badge-suspicious', flagged:'badge-flagged' };
+  const lbl = { clean:'&#10003; Clean', suspicious:'&#9888; Suspicious', flagged:'&#10007; Flagged' };
+  return '<span class="' + (map[v]||'badge-suspicious') + '">' + (lbl[v]||v) + '</span>';
+}
+function toast(msg, type) {
+  type = type || 'info';
+  const el = document.createElement('div');
+  el.className = 'alert alert-' + type;
+  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;min-width:260px;box-shadow:0 4px 12px rgba(0,0,0,.15)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 3500);
+}
+
+function donutRing(score, color) {
+  var r = 36, cx = 44, cy = 44;
+  var circumference = 2 * Math.PI * r;
+  var dash = score * circumference;
+  return '<svg width="88" height="88" viewBox="0 0 88 88">' +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="#e0e0e0" stroke-width="8"/>' +
+    '<circle cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="none" stroke="' + color + '" stroke-width="8"' +
+      ' stroke-dasharray="' + dash + ' ' + circumference + '"' +
+      ' stroke-dashoffset="' + (circumference * 0.25) + '"' +
+      ' stroke-linecap="round" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>' +
+    '<text x="' + cx + '" y="' + (cy + 5) + '" text-anchor="middle" font-size="14" font-weight="700" fill="' + color + '">' +
+      Math.round(score * 100) + '%' +
+    '</text></svg>';
+}
+
+async function loadReport() {
+  var main = document.getElementById('report-main');
+  try {
+    var submission = null, report = null, assignment = null;
+
+    var courses = await apiGet('/assignments/courses');
+    outer: for (var i = 0; i < courses.length; i++) {
+      var assignments = await apiGet('/assignments?course_id=' + courses[i].id);
+      for (var j = 0; j < assignments.length; j++) {
+        var subs = await apiGet('/assignments/' + assignments[j].id + '/submissions');
+        for (var k = 0; k < subs.length; k++) {
+          if (subs[k].id === submissionId) {
+            submission = subs[k]; report = subs[k].report; assignment = assignments[j];
+            break outer;
+          }
+        }
+      }
+    }
+
+    if (!submission || !report) {
+      main.innerHTML = '<div class="alert alert-danger">Report not found.</div>';
+      return;
+    }
+
+    var verdictColor = { clean:'var(--ibm-green)', suspicious:'#d4a017', flagged:'var(--ibm-red)' };
+    var vc = verdictColor[report.verdict] || 'var(--ibm-red)';
+
+    var matchedHtml = '';
+    if (report.matched_sources && report.matched_sources.length) {
+      matchedHtml = '<div class="card"><h3>Matched Sources (' + report.matched_sources.length + ')</h3>';
+      report.matched_sources.forEach(function(src) {
+        matchedHtml += '<div style="border:1px solid var(--ibm-gray-20);border-radius:4px;padding:1rem;margin-bottom:.75rem">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center">' +
+            '<strong>' + src.student_name + ' (' + src.student_id + ')</strong>' +
+            '<span style="font-weight:700;color:var(--ibm-red)">' + pct(src.similarity) + ' match</span>' +
+          '</div>';
+        if (src.passages) {
+          src.passages.slice(0, 3).forEach(function(p) {
+            matchedHtml += '<div style="margin-top:.5rem;font-size:.85rem;background:#fff3f3;border-left:3px solid var(--ibm-red);padding:.4rem .75rem;border-radius:0 4px 4px 0">' +
+              '<div><em>Submission:</em> ' + p.submission_sentence + '</div>' +
+              '<div style="margin-top:.25rem;color:var(--ibm-gray-70)"><em>Reference:</em> ' + p.reference_sentence + '</div>' +
+              '</div>';
+          });
+        }
+        matchedHtml += '</div>';
+      });
+      matchedHtml += '</div>';
+    }
+
+    var passagesHtml = '';
+    if (report.flagged_passages && report.flagged_passages.length) {
+      passagesHtml = '<div class="card"><h3>&#9888; Flagged Passages</h3>';
+      report.flagged_passages.forEach(function(p) {
+        passagesHtml += '<div class="passage-box">&ldquo;' + p + '&rdquo;</div>';
+      });
+      passagesHtml += '</div>';
+    }
+
+    main.innerHTML =
+      '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;flex-wrap:wrap">' +
+        '<div>' +
+          '<h1 class="page-title">' + assignment.title + '</h1>' +
+          '<p class="page-subtitle">Submitted by <strong>' + submission.student_name + '</strong> (' + submission.student_id + ') &middot; ' +
+            new Date(submission.submitted_at).toLocaleString() + '</p>' +
+        '</div>' +
+        '<div style="margin-left:auto;font-size:1.2rem">' + verdictBadge(report.verdict) + '</div>' +
+      '</div>' +
+
+      '<div class="card">' +
+        '<h3><span class="granite-badge">IBM Granite</span> Analysis Scores</h3>' +
+        '<div style="display:flex;gap:2rem;flex-wrap:wrap;margin-top:.5rem;align-items:center">' +
+          '<div style="text-align:center">' + donutRing(report.similarity_score,   '#0f62fe') + '<div style="font-size:.8rem;color:var(--ibm-gray-70)">Similarity</div></div>' +
+          '<div style="text-align:center">' + donutRing(report.ai_generated_score, '#8a3ffc') + '<div style="font-size:.8rem;color:var(--ibm-gray-70)">AI Generated</div></div>' +
+          '<div style="text-align:center">' + donutRing(report.paraphrase_score,   '#f1c21b') + '<div style="font-size:.8rem;color:var(--ibm-gray-70)">Paraphrase</div></div>' +
+          '<div style="text-align:center">' + donutRing(report.overall_risk_score, vc)       + '<div style="font-size:.8rem;color:var(--ibm-gray-70)">Overall Risk</div></div>' +
+        '</div>' +
+      '</div>' +
+
+      '<div class="card">' +
+        '<h3>&#129302; IBM Granite Explanation</h3>' +
+        '<p style="line-height:1.7;font-size:.95rem">' + (report.granite_explanation || 'No explanation available.') + '</p>' +
+      '</div>' +
+
+      passagesHtml +
+      matchedHtml +
+
+      '<div class="card" id="feedback-card">' +
+        '<h3>Instructor Feedback</h3>' +
+        '<p style="font-size:.875rem;color:var(--ibm-gray-70);margin-bottom:1rem">Confirm or dismiss this flag to help the system learn.</p>' +
+        '<div class="form-group"><label for="inst-name">Your Name</label><input id="inst-name" placeholder="Prof. Smith"/></div>' +
+        '<div class="form-group"><label for="inst-notes">Notes (optional)</label><textarea id="inst-notes" style="min-height:80px" placeholder="Any additional context..."></textarea></div>' +
+        '<div style="display:flex;gap:1rem">' +
+          '<button class="btn btn-danger"    onclick="submitFeedback(true)">Confirm Plagiarism</button>' +
+          '<button class="btn btn-secondary" onclick="submitFeedback(false)">Dismiss &mdash; Original Work</button>' +
+        '</div>' +
+        '<div id="feedback-result" style="margin-top:1rem"></div>' +
+      '</div>' +
+
+      '<div style="text-align:right;margin-top:1rem">' +
+        '<button class="btn btn-secondary" id="btn-reanalyze">Re-Analyze</button>' +
+      '</div>';
+
+    document.getElementById('btn-reanalyze').addEventListener('click', async function() {
+      var btn = document.getElementById('btn-reanalyze');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Re-analyzing...';
+      try {
+        await apiPost('/analysis/submission/' + submissionId, {});
+        toast('Re-analysis complete!', 'success');
+        loadReport();
+      } catch(e) {
+        toast(e.message, 'danger');
+        btn.disabled = false; btn.textContent = 'Re-Analyze';
+      }
+    });
+
+  } catch(e) {
+    main.innerHTML = '<div class="alert alert-danger">Error loading report: ' + e.message + '</div>';
+  }
+}
+
+function submitFeedback(confirmed) {
+  var instructor = document.getElementById('inst-name').value.trim();
+  var notes      = document.getElementById('inst-notes').value.trim();
+  if (!instructor) { toast('Enter your name.', 'warning'); return; }
+  apiPost('/assignments/submissions/' + submissionId + '/feedback', {
+    instructor: instructor, confirmed: confirmed, notes: notes
+  }).then(function() {
+    document.getElementById('feedback-result').innerHTML =
+      '<div class="alert alert-success">Feedback recorded. Thank you!</div>';
+  }).catch(function(e) {
+    document.getElementById('feedback-result').innerHTML =
+      '<div class="alert alert-danger">' + e.message + '</div>';
+  });
+}
+
+loadReport();
+</script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Submit Assignment · Plagiarism Intelligence</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<header class="navbar">
+  <a class="brand" href="/">&#128269; Plagiarism Intelligence <span class="badge">IBM Granite</span></a>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/submit">Submit</a>
+    <a href="/dashboard">Dashboard</a>
+  </nav>
+</header>
+
+<main class="container">
+  <h1 class="page-title">Submit Assignment</h1>
+  <p class="page-subtitle">Upload or paste your assignment. IBM Granite will analyze it for originality.</p>
+
+  <div id="result-area"></div>
+
+  <div class="card">
+    <h3>1 &middot; Select Course &amp; Assignment</h3>
+    <div class="form-group">
+      <label for="course-select">Course</label>
+      <select id="course-select"><option value="">Loading...</option></select>
+    </div>
+    <div class="form-group">
+      <label for="assignment-select">Assignment</label>
+      <select id="assignment-select"><option value="">Select a course first...</option></select>
+    </div>
+
+    <!-- Quick create course -->
+    <details style="margin-top:1rem">
+      <summary style="cursor:pointer;font-size:.875rem;color:var(--ibm-blue)">+ Create new course</summary>
+      <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;">
+        <input id="new-course-name" placeholder="Course name"/>
+        <input id="new-course-code" placeholder="Course code (e.g. CS101)"/>
+        <input id="new-course-inst" placeholder="Instructor name"/>
+      </div>
+      <button class="btn btn-secondary" id="btn-create-course" style="margin-top:.75rem">Create Course</button>
+    </details>
+
+    <!-- Quick create assignment -->
+    <details style="margin-top:.75rem">
+      <summary style="cursor:pointer;font-size:.875rem;color:var(--ibm-blue)">+ Create new assignment</summary>
+      <div style="margin-top:.75rem;display:grid;grid-template-columns:2fr 1fr;gap:.75rem;">
+        <input id="new-asgn-title" placeholder="Assignment title"/>
+        <input id="new-asgn-desc" placeholder="Description (optional)"/>
+      </div>
+      <button class="btn btn-secondary" id="btn-create-asgn" style="margin-top:.75rem">Create Assignment</button>
+    </details>
+  </div>
+
+  <div class="card">
+    <h3>2 &middot; Student Details</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+      <div class="form-group">
+        <label for="student-name">Full Name</label>
+        <input id="student-name" placeholder="John Doe" required/>
+      </div>
+      <div class="form-group">
+        <label for="student-id">Student ID</label>
+        <input id="student-id" placeholder="STU2024001" required/>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>3 &middot; Assignment Content</h3>
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem;">
+      <button class="btn btn-primary" id="tab-text" onclick="showTab('text')">&#9998; Paste Text</button>
+      <button class="btn btn-secondary" id="tab-file" onclick="showTab('file')">&#128206; Upload File</button>
+    </div>
+    <div id="panel-text">
+      <div class="form-group">
+        <label for="content-text">Assignment Text</label>
+        <textarea id="content-text" placeholder="Paste your assignment text here..."></textarea>
+      </div>
+    </div>
+    <div id="panel-file" style="display:none">
+      <div class="drop-zone" id="drop-zone">
+        <input type="file" id="file-input" accept=".txt,.pdf,.docx"/>
+        <p>&#128194; Drag &amp; drop a file here or <strong style="color:var(--ibm-blue)">click to browse</strong></p>
+        <small>Supports TXT, PDF, DOCX &middot; Max 16 MB</small>
+        <p id="file-name" style="margin-top:.5rem;font-weight:600;color:var(--ibm-blue)"></p>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="btn-submit" style="width:100%;justify-content:center;padding:1rem;">
+    &#128269; Analyze Submission
+  </button>
+</main>
+
+<footer>AI Plagiarism Intelligence &middot; IBM Granite (watsonx.ai)</footer>
+
+<script>
+// ── Tiny API helper ───────────────────────────────────────────
+async function apiGet(path) {
+  const r = await fetch('/api' + path);
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+async function apiPost(path, body) {
+  const r = await fetch('/api' + path, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error || r.statusText); }
+  return r.json();
+}
+
+// ── UI helpers ────────────────────────────────────────────────
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+function verdictBadge(v) {
+  const map = { clean:'badge-clean', suspicious:'badge-suspicious', flagged:'badge-flagged' };
+  const lbl = { clean:'&#10003; Clean', suspicious:'&#9888; Suspicious', flagged:'&#10007; Flagged' };
+  return '<span class="' + (map[v]||'badge-suspicious') + '">' + (lbl[v]||v) + '</span>';
+}
+
+function progressBar(score) {
+  const cls = score >= 0.75 ? 'high' : score >= 0.45 ? 'medium' : 'low';
+  return '<div class="progress-wrap"><div class="progress-bar ' + cls + '" style="width:' + pct(score) + '"></div></div><small style="color:var(--ibm-gray-70)">' + pct(score) + '</small>';
+}
+
+function toast(msg, type) {
+  type = type || 'info';
+  const el = document.createElement('div');
+  el.className = 'alert alert-' + type;
+  el.style.cssText = 'position:fixed;bottom:1.5rem;right:1.5rem;z-index:999;min-width:260px;box-shadow:0 4px 12px rgba(0,0,0,.15)';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(function(){ el.remove(); }, 3500);
+}
+
+// ── Load courses ──────────────────────────────────────────────
+async function loadCourses() {
+  const sel = document.getElementById('course-select');
+  sel.innerHTML = '<option value="">Loading...</option>';
+  try {
+    const courses = await apiGet('/assignments/courses');
+    if (!courses.length) {
+      sel.innerHTML = '<option value="">No courses yet -- create one below</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">Select course...</option>';
+    courses.forEach(function(c) {
+      const o = document.createElement('option');
+      o.value = c.id;
+      o.textContent = c.code + ' - ' + c.name;
+      sel.appendChild(o);
+    });
+  } catch(e) {
+    sel.innerHTML = '<option value="">Could not load courses</option>';
+    console.error(e);
+  }
+}
+
+// ── Load assignments ──────────────────────────────────────────
+async function loadAssignments(courseId) {
+  const sel = document.getElementById('assignment-select');
+  if (!courseId) { sel.innerHTML = '<option value="">Select a course first...</option>'; return; }
+  sel.innerHTML = '<option value="">Loading...</option>';
+  try {
+    const list = await apiGet('/assignments?course_id=' + courseId);
+    if (!list.length) {
+      sel.innerHTML = '<option value="">No assignments yet -- create one below</option>';
+      return;
+    }
+    sel.innerHTML = '<option value="">Select assignment...</option>';
+    list.forEach(function(a) {
+      const o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.title;
+      sel.appendChild(o);
+    });
+  } catch(e) {
+    sel.innerHTML = '<option value="">Could not load assignments</option>';
+    console.error(e);
+  }
+}
+
+// ── Tab toggle ────────────────────────────────────────────────
+function showTab(name) {
+  document.getElementById('panel-text').style.display = name === 'text' ? '' : 'none';
+  document.getElementById('panel-file').style.display = name === 'file' ? '' : 'none';
+  document.getElementById('tab-text').className = 'btn ' + (name==='text' ? 'btn-primary' : 'btn-secondary');
+  document.getElementById('tab-file').className = 'btn ' + (name==='file' ? 'btn-primary' : 'btn-secondary');
+}
+
+// ── Wire up events ────────────────────────────────────────────
+document.getElementById('course-select').addEventListener('change', function() {
+  loadAssignments(this.value);
+});
+
+var dropZone  = document.getElementById('drop-zone');
+var fileInput = document.getElementById('file-input');
+var fileNameEl = document.getElementById('file-name');
+dropZone.addEventListener('click', function() { fileInput.click(); });
+dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
+dropZone.addEventListener('drop', function(e) {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  fileInput.files = e.dataTransfer.files;
+  fileNameEl.textContent = fileInput.files[0] ? fileInput.files[0].name : '';
+});
+fileInput.addEventListener('change', function() {
+  fileNameEl.textContent = fileInput.files[0] ? fileInput.files[0].name : '';
+});
+
+document.getElementById('btn-create-course').addEventListener('click', async function() {
+  var name = document.getElementById('new-course-name').value.trim();
+  var code = document.getElementById('new-course-code').value.trim();
+  var inst = document.getElementById('new-course-inst').value.trim();
+  if (!name || !code || !inst) { toast('Fill all course fields.', 'warning'); return; }
+  try {
+    await apiPost('/assignments/courses', { name:name, code:code, instructor:inst });
+    await loadCourses();
+    toast('Course created!', 'success');
+  } catch(e) { toast(e.message, 'danger'); }
+});
+
+document.getElementById('btn-create-asgn').addEventListener('click', async function() {
+  var courseId = document.getElementById('course-select').value;
+  var title = document.getElementById('new-asgn-title').value.trim();
+  var desc  = document.getElementById('new-asgn-desc').value.trim();
+  if (!courseId) { toast('Select a course first.', 'warning'); return; }
+  if (!title)    { toast('Assignment title is required.', 'warning'); return; }
+  try {
+    await apiPost('/assignments', { course_id: parseInt(courseId), title:title, description:desc });
+    await loadAssignments(courseId);
+    toast('Assignment created!', 'success');
+  } catch(e) { toast(e.message, 'danger'); }
+});
+
+document.getElementById('btn-submit').addEventListener('click', async function() {
+  var assignmentId = document.getElementById('assignment-select').value;
+  var studentName  = document.getElementById('student-name').value.trim();
+  var studentId    = document.getElementById('student-id').value.trim();
+  if (!assignmentId) { toast('Select an assignment.', 'warning'); return; }
+  if (!studentName)  { toast('Student name is required.', 'warning'); return; }
+  if (!studentId)    { toast('Student ID is required.', 'warning'); return; }
+
+  var btn = document.getElementById('btn-submit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Analyzing with IBM Granite...';
+
+  var resultArea = document.getElementById('result-area');
+  resultArea.innerHTML = '';
+
+  try {
+    var isFile = document.getElementById('panel-file').style.display !== 'none';
+    var submission;
+
+    if (isFile && fileInput.files.length) {
+      var fd = new FormData();
+      fd.append('student_name', studentName);
+      fd.append('student_id',   studentId);
+      fd.append('file', fileInput.files[0]);
+      var res = await fetch('/api/assignments/' + assignmentId + '/submissions', { method:'POST', body: fd });
+      if (!res.ok) throw new Error((await res.json()).error || 'Upload failed');
+      submission = await res.json();
+    } else {
+      var content = document.getElementById('content-text').value.trim();
+      if (!content) { toast('Paste your assignment text.', 'warning'); btn.disabled=false; btn.textContent='Analyze Submission'; return; }
+      submission = await apiPost('/assignments/' + assignmentId + '/submissions', { student_name: studentName, student_id: studentId, content: content });
+    }
+
+    var r = submission.report;
+    if (r) {
+      var alertType = r.verdict === 'clean' ? 'success' : r.verdict === 'suspicious' ? 'warning' : 'danger';
+      resultArea.innerHTML = '<div class="alert alert-' + alertType + '">' +
+        '<strong>Analysis Complete</strong> &mdash; ' + verdictBadge(r.verdict) +
+        '<div style="margin-top:.75rem;display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;">' +
+          '<div><div style="font-size:.8rem;color:var(--ibm-gray-70)">Similarity</div>' + progressBar(r.similarity_score) + '</div>' +
+          '<div><div style="font-size:.8rem;color:var(--ibm-gray-70)">AI Generated</div>' + progressBar(r.ai_generated_score) + '</div>' +
+          '<div><div style="font-size:.8rem;color:var(--ibm-gray-70)">Paraphrase</div>' + progressBar(r.paraphrase_score) + '</div>' +
+          '<div><div style="font-size:.8rem;color:var(--ibm-gray-70)">Overall Risk</div>' + progressBar(r.overall_risk_score) + '</div>' +
+        '</div>' +
+        '<p style="margin-top:.75rem;font-size:.9rem">' + (r.granite_explanation||'') + '</p>' +
+        '<a href="/report/' + submission.id + '" class="btn btn-primary" style="margin-top:.75rem">View Full Report</a>' +
+        '</div>';
+    }
+  } catch(e) {
+    toast(e.message, 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '&#128269; Analyze Submission';
+  }
+});
+
+// ── Kick off ──────────────────────────────────────────────────
+loadCourses();
+</script>
+</body>
+</html>

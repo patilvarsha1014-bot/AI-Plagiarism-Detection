@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Plagiarism Intelligence</title>
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<header class="navbar">
+  <a class="brand" href="/">&#128269; Plagiarism Intelligence <span class="badge">IBM Granite</span></a>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/submit">Submit</a>
+    <a href="/dashboard">Dashboard</a>
+  </nav>
+</header>
+
+<main class="container">
+  <h1 class="page-title">AI-Driven Plagiarism Intelligence</h1>
+  <p class="page-subtitle">
+    Powered by <strong>IBM Granite</strong> (watsonx.ai) &mdash; contextual, adaptive academic integrity analysis.
+  </p>
+
+  <div class="stats-grid">
+    <div class="stat-tile"><div class="value" id="stat-total">&#8212;</div><div class="label">Total Analyses</div></div>
+    <div class="stat-tile"><div class="value" id="stat-flagged" style="color:var(--ibm-red)">&#8212;</div><div class="label">Flagged</div></div>
+    <div class="stat-tile"><div class="value" id="stat-suspicious" style="color:#d4a017">&#8212;</div><div class="label">Suspicious</div></div>
+    <div class="stat-tile"><div class="value" id="stat-clean" style="color:var(--ibm-green)">&#8212;</div><div class="label">Clean</div></div>
+    <div class="stat-tile"><div class="value" id="stat-risk">&#8212;</div><div class="label">Avg Risk Score</div></div>
+    <div class="stat-tile"><div class="value" id="stat-ai">&#8212;</div><div class="label">Avg AI Score</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin-bottom:2rem;">
+    <div class="card">
+      <h3>&#129302; IBM Granite Analysis</h3>
+      <p style="color:var(--ibm-gray-70);font-size:.9rem;line-height:1.6">
+        Uses IBM Granite 13B Instruct to perform deep contextual analysis detecting paraphrasing,
+        AI-generated content, and structural plagiarism patterns.
+      </p>
+    </div>
+    <div class="card">
+      <h3>&#128202; TF-IDF Similarity Engine</h3>
+      <p style="color:var(--ibm-gray-70);font-size:.9rem;line-height:1.6">
+        Vectorised cosine similarity across all peer submissions in the same assignment,
+        with sentence-level passage matching for targeted evidence.
+      </p>
+    </div>
+    <div class="card">
+      <h3>&#128105;&#8205;&#127979; Adaptive Instructor Feedback</h3>
+      <p style="color:var(--ibm-gray-70);font-size:.9rem;line-height:1.6">
+        Instructors confirm or dismiss flags to enrich the system's historical
+        knowledge and improve detection accuracy over time.
+      </p>
+    </div>
+    <div class="card">
+      <h3>&#128678; Risk Scoring</h3>
+      <p style="color:var(--ibm-gray-70);font-size:.9rem;line-height:1.6">
+        Composite risk score combining TF-IDF (40%), Granite similarity (35%), and AI
+        detection (25%) into a single actionable verdict: Clean / Suspicious / Flagged.
+      </p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Quick Actions</h3>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+      <a href="/submit" class="btn btn-primary">Submit Assignment</a>
+      <a href="/dashboard" class="btn btn-secondary">View Dashboard</a>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Recent Flagged &amp; Suspicious Submissions</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Student</th><th>Assignment</th><th>Risk Score</th><th>Verdict</th><th>Action</th></tr>
+        </thead>
+        <tbody id="recent-body">
+          <tr><td colspan="5" style="text-align:center"><span class="spinner"></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer>AI Plagiarism Intelligence &middot; Powered by IBM Granite (watsonx.ai) &middot; IBM Cloud</footer>
+
+<script>
+async function apiGet(path) {
+  const r = await fetch('/api' + path);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+function verdictBadge(v) {
+  const map = { clean:'badge-clean', suspicious:'badge-suspicious', flagged:'badge-flagged' };
+  const lbl = { clean:'&#10003; Clean', suspicious:'&#9888; Suspicious', flagged:'&#10007; Flagged' };
+  return '<span class="' + (map[v]||'badge-suspicious') + '">' + (lbl[v]||v) + '</span>';
+}
+
+(async function() {
+  // Load stats
+  try {
+    const s = await apiGet('/analysis/stats');
+    document.getElementById('stat-total').textContent      = s.total_analyses;
+    document.getElementById('stat-flagged').textContent    = s.flagged;
+    document.getElementById('stat-suspicious').textContent = s.suspicious;
+    document.getElementById('stat-clean').textContent      = s.clean;
+    document.getElementById('stat-risk').textContent       = pct(s.avg_risk_score);
+    document.getElementById('stat-ai').textContent         = pct(s.avg_ai_score);
+  } catch(e) { console.warn('Stats not available', e); }
+
+  // Load recent flagged/suspicious
+  const tbody = document.getElementById('recent-body');
+  try {
+    const courses = await apiGet('/assignments/courses');
+    let rows = '';
+    for (const course of courses) {
+      const assignments = await apiGet('/assignments?course_id=' + course.id);
+      for (const asgn of assignments) {
+        const subs = await apiGet('/assignments/' + asgn.id + '/submissions');
+        for (const sub of subs) {
+          if (sub.report && sub.report.verdict !== 'clean') {
+            rows += '<tr>' +
+              '<td>' + sub.student_name + '</td>' +
+              '<td>' + asgn.title + '</td>' +
+              '<td>' + pct(sub.report.overall_risk_score) + '</td>' +
+              '<td>' + verdictBadge(sub.report.verdict) + '</td>' +
+              '<td><a href="/report/' + sub.id + '" class="btn btn-secondary" style="padding:.3rem .8rem;font-size:.8rem">View</a></td>' +
+              '</tr>';
+          }
+        }
+      }
+    }
+    tbody.innerHTML = rows || '<tr><td colspan="5" style="text-align:center;color:var(--ibm-gray-70)">No flagged submissions yet.</td></tr>';
+  } catch(e) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--ibm-gray-70)">No data available.</td></tr>';
+  }
+})();
+</script>
+</body>
+</html>

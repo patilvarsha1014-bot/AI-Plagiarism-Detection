@@ -1,0 +1,235 @@
+/* ================================================================
+   AI Plagiarism Intelligence – Global Stylesheet
+   IBM Design Language inspired palette
+   ================================================================ */
+
+:root {
+  --ibm-blue:      #0f62fe;
+  --ibm-blue-dark: #0043ce;
+  --ibm-gray-10:   #f4f4f4;
+  --ibm-gray-20:   #e0e0e0;
+  --ibm-gray-70:   #525252;
+  --ibm-gray-100:  #161616;
+  --ibm-red:       #da1e28;
+  --ibm-yellow:    #f1c21b;
+  --ibm-green:     #24a148;
+  --ibm-purple:    #8a3ffc;
+  --white:         #ffffff;
+  --font:          'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif;
+  --radius:        4px;
+  --shadow:        0 2px 8px rgba(0,0,0,.12);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  background: var(--ibm-gray-10);
+  color: var(--ibm-gray-100);
+  min-height: 100vh;
+}
+
+/* ── Nav ──────────────────────────────────────────────────── */
+.navbar {
+  background: var(--ibm-gray-100);
+  color: var(--white);
+  padding: 0 2rem;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.navbar .brand {
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--white);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.navbar .brand .badge {
+  background: var(--ibm-blue);
+  font-size: .65rem;
+  padding: 1px 6px;
+  border-radius: 20px;
+  font-weight: 400;
+}
+.navbar nav { margin-left: auto; display: flex; gap: 1.5rem; }
+.navbar nav a { color: var(--ibm-gray-20); text-decoration: none; font-size: .875rem; }
+.navbar nav a:hover { color: var(--white); }
+
+/* ── Layout ───────────────────────────────────────────────── */
+.container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+.page-title { font-size: 1.75rem; font-weight: 600; margin-bottom: .25rem; }
+.page-subtitle { color: var(--ibm-gray-70); font-size: .925rem; margin-bottom: 2rem; }
+
+/* ── Cards ─────────────────────────────────────────────────── */
+.card {
+  background: var(--white);
+  border: 1px solid var(--ibm-gray-20);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow);
+}
+.card h3 { font-size: 1rem; font-weight: 600; margin-bottom: 1rem; }
+
+/* ── Stat tiles ─────────────────────────────────────────────── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+.stat-tile {
+  background: var(--white);
+  border: 1px solid var(--ibm-gray-20);
+  border-radius: var(--radius);
+  padding: 1.25rem 1rem;
+  text-align: center;
+}
+.stat-tile .value { font-size: 2rem; font-weight: 700; color: var(--ibm-blue); }
+.stat-tile .label { font-size: .8rem; color: var(--ibm-gray-70); margin-top: .25rem; }
+
+/* ── Badges ─────────────────────────────────────────────────── */
+.badge-clean      { background:#d9f2e3; color: #0a6640; padding:2px 10px; border-radius:20px; font-size:.8rem; font-weight:600; }
+.badge-suspicious { background:#fff1cc; color: #7d4e00; padding:2px 10px; border-radius:20px; font-size:.8rem; font-weight:600; }
+.badge-flagged    { background:#ffd7d9; color: #750e13; padding:2px 10px; border-radius:20px; font-size:.8rem; font-weight:600; }
+
+/* ── Progress bar ────────────────────────────────────────────── */
+.progress-wrap { background: var(--ibm-gray-20); border-radius:20px; height:10px; overflow:hidden; }
+.progress-bar  { height:100%; border-radius:20px; transition: width .4s ease; }
+.progress-bar.low    { background: var(--ibm-green); }
+.progress-bar.medium { background: var(--ibm-yellow); }
+.progress-bar.high   { background: var(--ibm-red); }
+
+/* ── Forms ───────────────────────────────────────────────────── */
+.form-group { margin-bottom: 1.25rem; }
+.form-group label { display:block; font-size:.875rem; font-weight:600; margin-bottom:.4rem; }
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  border: 1px solid var(--ibm-gray-20);
+  border-radius: var(--radius);
+  padding: .625rem .875rem;
+  font-size: .925rem;
+  font-family: var(--font);
+  outline: none;
+  transition: border-color .2s;
+}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus { border-color: var(--ibm-blue); }
+.form-group textarea { min-height: 160px; resize: vertical; }
+
+/* ── Buttons ─────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  padding: .65rem 1.5rem;
+  border: none;
+  border-radius: var(--radius);
+  font-size: .9rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background .2s;
+}
+.btn-primary   { background: var(--ibm-blue); color: var(--white); }
+.btn-primary:hover { background: var(--ibm-blue-dark); }
+.btn-danger    { background: var(--ibm-red);  color: var(--white); }
+.btn-secondary { background: var(--ibm-gray-20); color: var(--ibm-gray-100); }
+.btn:disabled  { opacity: .5; cursor: not-allowed; }
+
+/* ── Table ───────────────────────────────────────────────────── */
+.table-wrap { overflow-x: auto; }
+table { width:100%; border-collapse:collapse; font-size:.9rem; }
+th, td { padding: .7rem 1rem; text-align:left; border-bottom: 1px solid var(--ibm-gray-20); }
+th { font-weight:600; background:var(--ibm-gray-10); }
+tr:hover td { background: #f0f7ff; }
+
+/* ── Alert ───────────────────────────────────────────────────── */
+.alert { padding: .875rem 1rem; border-radius:var(--radius); margin-bottom:1rem; font-size:.9rem; }
+.alert-info    { background:#eaf0ff; border:1px solid #a6c2f7; color:#003692; }
+.alert-success { background:#d9f2e3; border:1px solid #82cfac; color:#0a6640; }
+.alert-danger  { background:#ffd7d9; border:1px solid #f5a6aa; color:#750e13; }
+.alert-warning { background:#fff1cc; border:1px solid #f7d775; color:#7d4e00; }
+
+/* ── Spinner ─────────────────────────────────────────────────── */
+.spinner {
+  width:28px; height:28px;
+  border:3px solid var(--ibm-gray-20);
+  border-top-color: var(--ibm-blue);
+  border-radius:50%;
+  animation: spin .8s linear infinite;
+  display:inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Drop zone ───────────────────────────────────────────────── */
+.drop-zone {
+  border: 2px dashed var(--ibm-gray-20);
+  border-radius: var(--radius);
+  padding: 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  color: var(--ibm-gray-70);
+}
+.drop-zone.dragover { border-color:var(--ibm-blue); background:#eaf0ff; }
+.drop-zone input[type=file] { display:none; }
+
+/* ── Passage highlight ───────────────────────────────────────── */
+.passage-box {
+  background: #fff8e1;
+  border-left: 3px solid var(--ibm-yellow);
+  padding: .6rem .875rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: .875rem;
+  margin-bottom: .6rem;
+}
+
+/* ── IBM granite note ────────────────────────────────────────── */
+.granite-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  background: #f0e6ff;
+  color: var(--ibm-purple);
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: .78rem;
+  font-weight: 600;
+}
+
+/* ── Risk meter ──────────────────────────────────────────────── */
+.risk-meter { position:relative; }
+.risk-meter .score-label {
+  position: absolute;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  font-size:1.4rem;
+  font-weight:700;
+}
+
+/* ── Footer ──────────────────────────────────────────────────── */
+footer {
+  text-align:center;
+  padding:1.5rem;
+  color:var(--ibm-gray-70);
+  font-size:.8rem;
+  border-top:1px solid var(--ibm-gray-20);
+  margin-top:3rem;
+}
+
+/* ── Responsive ──────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .container { padding: 1rem; }
+  .stats-grid { grid-template-columns: 1fr 1fr; }
+}
